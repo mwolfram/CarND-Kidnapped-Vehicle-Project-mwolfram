@@ -21,11 +21,11 @@ using namespace std;
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
     if (!is_initialized) {
-        default_random_engine gen;
+        default_random_engine random_generator;
 
-        double std_x = std[0];
-        double std_y = std[1];
-        double std_theta = std[2];
+        const double& std_x = std[0];
+        const double& std_y = std[1];
+        const double& std_theta = std[2];
 
         // Number of particles in the filter
         num_particles = 500;
@@ -43,9 +43,9 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         for (int i = 0; i < num_particles; ++i) {
             Particle particle;
             particle.id = i;
-            particle.x = dist_x(gen);
-            particle.y = dist_y(gen);
-            particle.theta = dist_theta(gen);
+            particle.x = dist_x(random_generator);
+            particle.y = dist_y(random_generator);
+            particle.theta = dist_theta(random_generator);
             particle.weight = 1.0;
             particles.push_back(particle);
             weights.push_back(particle.weight);
@@ -56,6 +56,29 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 }
 
 void ParticleFilter::prediction(double delta_t, double std_pos[], double velocity, double yaw_rate) {
+
+    // TODO make sure that std_pos has exactly these two values!
+
+    default_random_engine random_generator;
+    normal_distribution<double> dist_velocity(velocity, std_pos[0]);
+    normal_distribution<double> dist_yaw_rate(yaw_rate, std_pos[1]);
+
+    // TODO isn't this a misunderstanding? do we really change the prediction result here?
+
+    const double noisy_velocity = dist_velocity(random_generator);
+    const double noisy_yaw_rate = dist_yaw_rate(random_generator);
+
+    // TODO watch the case when yaw rate is zero!
+
+    for (unsigned int i = 0; i < particles.size(); ++i) {
+        const double& yaw = particles[i].theta;
+        const double yaw_rate_dt = noisy_yaw_rate * delta_t;
+        const double v_over_yawr = noisy_velocity/noisy_yaw_rate;
+        particles[i].x += (v_over_yawr*(sin(yaw + yaw_rate_dt)-sin(yaw)));
+        particles[i].y += (v_over_yawr*(cos(yaw)-cos(yaw + yaw_rate_dt)));
+        particles[i].theta += yaw_rate_dt;
+    }
+
 	// TODO: Add measurements to each particle and add random Gaussian noise.
 	// NOTE: When adding noise you may find std::normal_distribution and std::default_random_engine useful.
 	//  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
@@ -73,6 +96,60 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
 		std::vector<LandmarkObs> observations, Map map_landmarks) {
+
+    for (unsigned int i = 0; i < particles.size(); ++i) {
+
+        const double& xP = particles[i].x;
+        const double& yP = particles[i].y;
+        const double& thP = particles[i].theta;
+        const double& cs = cos(thP);
+        const double& sn = sin(thP);
+        const double& stdx = std_landmark[0];
+        const double& stdy = std_landmark[1];
+
+        std::vector<int> associations;
+        std::vector<double> sense_x;
+        std::vector<double> sense_y;
+        for (unsigned int o = 0; o < observations.size(); ++o) {
+            const double& x = observations[o].x;
+            const double& y = observations[o].y;
+
+            // calculate the world coordinates of the measurement
+            const double xW = x * cs - y * sn + xP;
+            const double yW = x * sn + y * cs + yP;
+
+            // find closest landmark
+            double min_distance = std::numeric_limits<double>::max();
+            int best_id = 0;
+            for (unsigned int l = 0; l < map_landmarks.landmark_list.size(); ++l) {
+                const double& xLM = map_landmarks.landmark_list[l].x_f;
+                const double& yLM = map_landmarks.landmark_list[l].y_f;
+                const double distance = dist(xW, yW, xLM, yLM);
+                if (distance < min_distance) {
+                    best_id = map_landmarks.landmark_list[l].id_i;
+                    min_distance = distance;
+                }
+            }
+
+            // save the associations for reference
+            associations.push_back(best_id);
+            sense_x.push_back(xW);
+            sense_y.push_back(yW);
+        }
+
+        SetAssociations(particles[i], associations, sense_x, sense_y);
+
+        // calculate the product of the multivariate gaussians
+        for (unsigned int a = 0; a < associations.size(); ++a) {
+            const double& xLM = map_landmarks.landmark_list[associations[a]].x_f;
+            const double& yLM = map_landmarks.landmark_list[associations[a]].y_f;
+            const double& xW = sense_x[a];
+            const double& yW = sense_y[a];
+
+            //particles[i].weight *= 1.0/(2.0*M_PI*stdx*stdy)*exp(-(((xLM-xW)*(xLM-xW)/(2*stdx*stdx)) + ((yLM-yW)*(yLM-yW)/(2*stdy*stdy))));
+        }
+    }
+
 	// TODO: Update the weights of each particle using a mult-variate Gaussian distribution. You can read
 	//   more about this distribution here: https://en.wikipedia.org/wiki/Multivariate_normal_distribution
 	// NOTE: The observations are given in the VEHICLE'S coordinate system. Your particles are located
