@@ -35,7 +35,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         const double& std_theta = std[2];
 
         // Number of particles in the filter
-        num_particles = 500;
+        num_particles = 200;
 
         // Create normal distributions for x, y and theta
         normal_distribution<double> dist_x(x, std_x);
@@ -65,28 +65,34 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 void ParticleFilter::prediction(double delta_t, double std_pos[], double velocity, double yaw_rate) {
 
     default_random_engine random_generator;
-    normal_distribution<double> dist_velocity(velocity, std_pos[0]);
-    normal_distribution<double> dist_yaw_rate(yaw_rate, std_pos[1]);
+    normal_distribution<double> dist_x(0.0, std_pos[0]);
+    normal_distribution<double> dist_y(0.0, std_pos[1]);
+    normal_distribution<double> dist_th(0.0, std_pos[2]);
+
+    const double yaw_rate_dt = yaw_rate * delta_t;
+    const double v_over_yawr = velocity/yaw_rate;
+    const double velocity_dt = velocity * delta_t;
 
     for (unsigned int i = 0; i < particles.size(); ++i) {
-        const double noisy_velocity = dist_velocity(random_generator);
-        const double noisy_yaw_rate = dist_yaw_rate(random_generator);
         const double& yaw = particles[i].theta;
-        const double yaw_rate_dt = noisy_yaw_rate * delta_t;
 
-        if (yaw_rate > 0.001) {
-            const double v_over_yawr = noisy_velocity/noisy_yaw_rate;
+        if (fabs(yaw_rate) > 0.000001) {
             particles[i].x += (v_over_yawr*(sin(yaw + yaw_rate_dt)-sin(yaw)));
             particles[i].y += (v_over_yawr*(cos(yaw)-cos(yaw + yaw_rate_dt)));
         }
         else {
-            const double velocity_dt = noisy_velocity * delta_t;
             particles[i].x += velocity_dt * cos(yaw);
             particles[i].y += velocity_dt * sin(yaw);
         }
 
+        // update theta, add noise, normalize
         particles[i].theta += yaw_rate_dt;
-        particles[i].theta = normalize(particles[i].theta);
+        particles[i].theta += dist_th(random_generator);
+        //particles[i].theta = normalize(particles[i].theta);
+
+        // add noise to the position
+        particles[i].x += dist_x(random_generator);
+        particles[i].y += dist_y(random_generator);
     }
 
 }
@@ -141,6 +147,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         particles[i] = SetAssociations(particles[i], associations, sense_x, sense_y);
 
         // calculate the product of the multivariate gaussians
+        particles[i].weight = 1.0;
         for (unsigned int a = 0; a < associations.size(); ++a) {
             const double& xLM = map_landmarks.landmark_list[associations[a]-1].x_f;
             const double& yLM = map_landmarks.landmark_list[associations[a]-1].y_f;
@@ -148,12 +155,10 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             const double& yW = sense_y[a];
 
             particles[i].weight *= 1.0/(2.0*M_PI*stdx*stdy)*exp(-(((xLM-xW)*(xLM-xW)/(2*stdx*stdx)) + ((yLM-yW)*(yLM-yW)/(2*stdy*stdy))));
-            weights[i] = particles[i].weight;
         }
+        weights[i] = particles[i].weight;
         sum_of_weights += weights[i];
     }
-
-    cout << sum_of_weights << std::endl;
 
     // normalize weights
     for (unsigned int i = 0; i < particles.size(); ++i) {
@@ -163,16 +168,14 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 }
 
 void ParticleFilter::resample() {
+
     default_random_engine random_generator;
     std::discrete_distribution<> dist(weights.begin(), weights.end());
 
     std::vector<Particle> new_particles;
     for(unsigned int i = 0; i < particles.size(); ++i) {
         int drawn_index = dist(random_generator);
-
-        Particle new_particle = particles[drawn_index];
-        new_particle.id = i;
-        new_particles.push_back(new_particle);
+        new_particles.push_back(particles[drawn_index]);
     }
 
     particles = new_particles;

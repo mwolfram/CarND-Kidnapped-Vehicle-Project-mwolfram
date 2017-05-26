@@ -1,0 +1,134 @@
+#include <iostream>
+#include <math.h>
+
+using namespace std;
+
+double mvGaussian(double xLM, double yLM, double xW, double yW, double stdx, double stdy) {
+    return 1.0/(2.0*M_PI*stdx*stdy)*exp(-(((xLM-xW)*(xLM-xW)/(2*stdx*stdx)) + ((yLM-yW)*(yLM-yW)/(2*stdy*stdy))));
+}
+
+void mvGaussianTest1() {
+    double xLM = 5;
+    double yLM = 3;
+    double xW = 6;
+    double yW = 3;
+    double stdx = 0.3;
+    double stdy = 0.3;
+
+    cout << mvGaussian(xLM, yLM, xW, yW, stdx, stdy) << endl;
+}
+
+void mvGaussianTest2() {
+    double xLM = 2;
+    double yLM = 1;
+    double xW = 2;
+    double yW = 2;
+    double stdx = 0.3;
+    double stdy = 0.3;
+
+    cout << mvGaussian(xLM, yLM, xW, yW, stdx, stdy) << endl;
+}
+
+void mvGaussianTest3() {
+    double xLM = 2;
+    double yLM = 1;
+    double xW = 0;
+    double yW = 5;
+    double stdx = 0.3;
+    double stdy = 0.3;
+
+    cout << mvGaussian(xLM, yLM, xW, yW, stdx, stdy) << endl;
+}
+
+int main() {
+    mvGaussianTest1(); // expected 0.006836448
+    mvGaussianTest2(); // expected 0.006836448
+    mvGaussianTest3(); // expected 9.83185E-49
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
